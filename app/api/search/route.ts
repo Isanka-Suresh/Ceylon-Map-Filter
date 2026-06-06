@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { GeocodingService } from '../../../lib/google/geocoding';
 import { PlacesService } from '../../../lib/google/places';
+import { PlacesRepository } from '../../../lib/supabase/repository';
+import { Place } from '../../../types';
 
 export async function POST(req: NextRequest) {
   try {
@@ -32,7 +34,20 @@ export async function POST(req: NextRequest) {
       pageToken
     );
 
-    // 3. Return results
+    // 3. Save to database
+    if (placesResult.places.length > 0) {
+      const placesToSave: Place[] = placesResult.places.map(p => ({
+        ...p,
+        search_keyword: keyword,
+        search_location: location
+      }));
+      
+      // Save asynchronously to prevent blocking the response, or await it if strict tracking is needed.
+      // We'll await it to ensure it successfully persists before returning success.
+      await PlacesRepository.savePlaces(placesToSave);
+    }
+
+    // 4. Return results
     return NextResponse.json({
       success: true,
       data: {
