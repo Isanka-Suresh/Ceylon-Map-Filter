@@ -9,6 +9,7 @@ export const googleConfig = {
   // Base URLs for the Google APIs we will use
   urls: {
     geocoding: 'https://maps.googleapis.com/maps/api/geocode/json',
-    placesNew: 'https://places.googleapis.com/v1/places:searchNearby'
+    placesNew: 'https://places.googleapis.com/v1/places:searchNearby',
+    placesTextSearch: 'https://places.googleapis.com/v1/places:searchText'
   }
 };

@@ -26,3 +26,16 @@ export interface GeocodingResult {
   longitude: number;
   formattedAddress: string;
 }
+
+export interface PlaceResult {
+  place_id: string;
+  name: string;
+  address: string | null;
+  phone: string | null;
+  website: string | null;
+  rating: number | null;
+  review_count: number | null;
+  latitude: number | null;
+  longitude: number | null;
+  category: string | null;
+}
