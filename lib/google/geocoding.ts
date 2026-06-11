@@ -36,10 +36,25 @@ export class GeocodingService {
       // We take the first result as the most relevant match
       const result = data.results[0];
 
+      let viewport;
+      if (result.geometry?.viewport) {
+        viewport = {
+          low: {
+            latitude: result.geometry.viewport.southwest.lat,
+            longitude: result.geometry.viewport.southwest.lng,
+          },
+          high: {
+            latitude: result.geometry.viewport.northeast.lat,
+            longitude: result.geometry.viewport.northeast.lng,
+          }
+        };
+      }
+
       return {
         latitude: result.geometry.location.lat,
         longitude: result.geometry.location.lng,
         formattedAddress: result.formatted_address,
+        viewport,
       };
     } catch (error: any) {
       if (axios.isAxiosError(error)) {

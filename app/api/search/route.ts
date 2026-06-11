@@ -4,15 +4,19 @@ import { ExtractionOrchestrator } from '../../../lib/services/extraction';
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { keyword, location, radius, pageToken } = body;
+    const { keyword, location, radius, mode = 'dropdown', latitude, longitude, pageToken } = body;
 
     // Validation
     if (!keyword || typeof keyword !== 'string') {
       return NextResponse.json({ error: 'Valid keyword string is required' }, { status: 400 });
     }
     
-    if (!location || typeof location !== 'string') {
-      return NextResponse.json({ error: 'Valid location string is required' }, { status: 400 });
+    if (mode === 'dropdown' && (!location || typeof location !== 'string')) {
+      return NextResponse.json({ error: 'Valid location string is required for dropdown mode' }, { status: 400 });
+    }
+
+    if (mode === 'map' && (typeof latitude !== 'number' || typeof longitude !== 'number')) {
+      return NextResponse.json({ error: 'Valid latitude and longitude are required for map mode' }, { status: 400 });
     }
 
     if (!radius || typeof radius !== 'number' || radius <= 0 || radius > 50000) {
@@ -20,12 +24,14 @@ export async function POST(req: NextRequest) {
     }
 
     // 1. Perform Deep Search Orchestration
-    // This handles Geocoding, Grid generation, Google Places Search, Pagination, Deduplication, and Database Storage.
-    const searchData = await ExtractionOrchestrator.performDeepSearch(
+    const searchData = await ExtractionOrchestrator.performDeepSearch({
       keyword,
-      location,
-      radius
-    );
+      locationName: location,
+      radiusMeters: radius,
+      mode,
+      latitude,
+      longitude
+    });
 
     // 2. Return results
     return NextResponse.json({

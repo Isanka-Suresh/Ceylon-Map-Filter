@@ -49,15 +49,48 @@ export class ExtractionOrchestrator {
    * Executes a comprehensive deep search across a generated grid, handling pagination,
    * deduplication, and database persistence automatically.
    */
-  static async performDeepSearch(keyword: string, locationName: string, radiusMeters: number) {
-    // 1. Resolve coordinates
-    const geoResult = await GeocodingService.getCoordinates(locationName);
+  static async performDeepSearch(request: import('../../types').ExtractionRequest) {
+    const { keyword, locationName, radiusMeters, mode, latitude, longitude } = request;
+    
+    let centerLat: number;
+    let centerLng: number;
+    let geoResult: import('../../types').GeocodingResult | undefined;
+
+    // 1. Resolve coordinates based on mode
+    if (mode === 'dropdown') {
+      if (!locationName) throw new Error("Location name is required for dropdown mode");
+      geoResult = await GeocodingService.getCoordinates(locationName);
+      centerLat = geoResult.latitude;
+      centerLng = geoResult.longitude;
+    } else {
+      if (latitude === undefined || longitude === undefined) {
+         throw new Error("Latitude and longitude are required for map mode");
+      }
+      centerLat = latitude;
+      centerLng = longitude;
+      geoResult = {
+        latitude: centerLat,
+        longitude: centerLng,
+        formattedAddress: `Map Point (${centerLat.toFixed(4)}, ${centerLng.toFixed(4)})`
+      };
+    }
     
     // 2. Generate search points
-    const gridPoints = this.generateSearchGrid(geoResult.latitude, geoResult.longitude, radiusMeters);
+    const gridPoints = this.generateSearchGrid(centerLat, centerLng, radiusMeters);
 
     // Use a Map to automatically deduplicate by place_id
     const allPlaces = new Map<string, PlaceResult>();
+
+    // Helper to check if a place is inside the viewport
+    const isInsideViewport = (place: PlaceResult, viewport?: import('../../types').Viewport) => {
+      if (!viewport || !place.latitude || !place.longitude) return true;
+      return (
+        place.latitude >= viewport.low.latitude &&
+        place.latitude <= viewport.high.latitude &&
+        place.longitude >= viewport.low.longitude &&
+        place.longitude <= viewport.high.longitude
+      );
+    };
 
     // 3. Search each point sequentially to avoid rate limits
     for (let i = 0; i < gridPoints.length; i++) {
@@ -76,6 +109,11 @@ export class ExtractionOrchestrator {
            );
 
            result.places.forEach(p => {
+             // For dropdown mode, strictly filter places by city boundaries
+             if (mode === 'dropdown' && geoResult?.viewport) {
+               if (!isInsideViewport(p, geoResult.viewport)) return;
+             }
+             
              if (!allPlaces.has(p.place_id)) {
                allPlaces.set(p.place_id, p);
              }
@@ -108,7 +146,7 @@ export class ExtractionOrchestrator {
       const placesToSave = uniquePlaces.map(p => ({
         ...p,
         search_keyword: keyword,
-        search_location: locationName
+        search_location: locationName || geoResult?.formattedAddress || "Map Selection"
       }));
       await PlacesRepository.savePlaces(placesToSave);
     }

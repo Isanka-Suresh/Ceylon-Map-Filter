@@ -39,7 +39,7 @@ export class PlacesService {
       // Construct the request body
       const requestBody: Record<string, any> = {
         textQuery: keyword,
-        locationRestriction: {
+        locationBias: {
           circle: {
             center: {
               latitude,

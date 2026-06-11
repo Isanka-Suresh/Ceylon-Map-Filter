@@ -17,14 +17,23 @@ export interface Place {
 
 export interface ExtractionRequest {
   keyword: string;
-  locationName: string;
+  locationName?: string;
   radiusMeters: number;
+  mode: 'dropdown' | 'map';
+  latitude?: number;
+  longitude?: number;
+}
+
+export interface Viewport {
+  low: { latitude: number; longitude: number };
+  high: { latitude: number; longitude: number };
 }
 
 export interface GeocodingResult {
   latitude: number;
   longitude: number;
   formattedAddress: string;
+  viewport?: Viewport;
 }
 
 export interface PlaceResult {
