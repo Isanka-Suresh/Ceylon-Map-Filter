@@ -1,11 +1,112 @@
 import React from 'react';
 import { PlaceResult } from '../types';
+import * as ExcelJS from 'exceljs';
+import pdfMake from 'pdfmake/build/pdfmake';
+import pdfFonts from 'pdfmake/build/vfs_fonts';
+import { Button } from './ui/Button';
+
+// Initialize pdfMake fonts safely
+if (pdfMake && pdfFonts && pdfFonts.pdfMake) {
+  pdfMake.vfs = pdfFonts.pdfMake.vfs;
+} else if (pdfMake && pdfFonts) {
+  // @ts-ignore
+  pdfMake.vfs = pdfFonts;
+}
 
 export const ResultsTable = ({ places }: { places: PlaceResult[] }) => {
   if (!places || places.length === 0) return null;
 
+  const handleExportExcel = async () => {
+    const workbook = new ExcelJS.Workbook();
+    const worksheet = workbook.addWorksheet('Places');
+
+    worksheet.columns = [
+      { header: 'Name', key: 'name', width: 30 },
+      { header: 'Category', key: 'category', width: 20 },
+      { header: 'Address', key: 'address', width: 40 },
+      { header: 'Rating', key: 'rating', width: 10 },
+      { header: 'Reviews', key: 'review_count', width: 10 },
+      { header: 'Phone', key: 'phone', width: 20 },
+      { header: 'Website', key: 'website', width: 35 },
+    ];
+
+    places.forEach(place => {
+      worksheet.addRow({
+        name: place.name,
+        category: place.category?.replace(/_/g, ' ') || '-',
+        address: place.address || '-',
+        rating: place.rating || '-',
+        review_count: place.review_count || '-',
+        phone: place.phone || '-',
+        website: place.website || '-',
+      });
+    });
+
+    const buffer = await workbook.xlsx.writeBuffer();
+    const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+    const url = window.URL.createObjectURL(blob);
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = 'places_data.xlsx';
+    anchor.click();
+    window.URL.revokeObjectURL(url);
+  };
+
+  const handleExportPDF = () => {
+    const tableBody = [
+      [{ text: 'Name', style: 'tableHeader' }, { text: 'Category', style: 'tableHeader' }, { text: 'Address', style: 'tableHeader' }, { text: 'Rating', style: 'tableHeader' }, { text: 'Phone', style: 'tableHeader' }]
+    ];
+
+    places.forEach(place => {
+      tableBody.push([
+        place.name || '-',
+        place.category?.replace(/_/g, ' ') || '-',
+        place.address || '-',
+        place.rating ? `${place.rating} (${place.review_count})` : '-',
+        place.phone || '-'
+      ]);
+    });
+
+    const docDefinition = {
+      content: [
+        { text: 'Extracted Places Data', style: 'header' },
+        {
+          table: {
+            headerRows: 1,
+            widths: ['*', 'auto', '*', 'auto', 'auto'],
+            body: tableBody
+          }
+        }
+      ],
+      styles: {
+        header: {
+          fontSize: 18,
+          bold: true,
+          margin: [0, 0, 0, 10]
+        },
+        tableHeader: {
+          bold: true,
+          fontSize: 13,
+          color: 'black'
+        }
+      }
+    };
+
+    pdfMake.createPdf(docDefinition as any).download('places_data.pdf');
+  };
+
   return (
-    <div className="w-full overflow-hidden rounded-2xl border border-gray-800 bg-gray-900/50 backdrop-blur-md shadow-2xl">
+    <div className="w-full space-y-4">
+      <div className="flex justify-end gap-3">
+        <Button onClick={handleExportExcel} className="bg-green-600 hover:bg-green-500 text-white px-4 py-2 h-auto text-sm border-none">
+          Export as Excel
+        </Button>
+        <Button onClick={handleExportPDF} className="bg-red-600 hover:bg-red-500 text-white px-4 py-2 h-auto text-sm border-none">
+          Export as PDF
+        </Button>
+      </div>
+
+      <div className="w-full overflow-hidden rounded-2xl border border-gray-800 bg-gray-900/50 backdrop-blur-md shadow-2xl">
       <div className="overflow-x-auto">
         <table className="w-full text-left border-collapse">
           <thead>
@@ -55,6 +156,7 @@ export const ResultsTable = ({ places }: { places: PlaceResult[] }) => {
           </tbody>
         </table>
       </div>
+    </div>
     </div>
   );
 };

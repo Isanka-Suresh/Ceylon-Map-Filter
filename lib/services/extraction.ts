@@ -45,12 +45,28 @@ export class ExtractionOrchestrator {
     ];
   }
 
+  // Distance calculator helper
+  private static calculateDistance(lat1: number, lon1: number, lat2: number, lon2: number): number {
+    const R = 6371e3; // metres
+    const φ1 = lat1 * Math.PI / 180;
+    const φ2 = lat2 * Math.PI / 180;
+    const Δφ = (lat2 - lat1) * Math.PI / 180;
+    const Δλ = (lon2 - lon1) * Math.PI / 180;
+
+    const a = Math.sin(Δφ / 2) * Math.sin(Δφ / 2) +
+            Math.cos(φ1) * Math.cos(φ2) *
+            Math.sin(Δλ / 2) * Math.sin(Δλ / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+
+    return R * c;
+  }
+
   /**
    * Executes a comprehensive deep search across a generated grid, handling pagination,
    * deduplication, and database persistence automatically.
    */
   static async performDeepSearch(request: import('../../types').ExtractionRequest) {
-    const { keyword, locationName, radiusMeters, mode, latitude, longitude } = request;
+    let { keyword, locationName, radiusMeters, mode, latitude, longitude } = request;
     
     let centerLat: number;
     let centerLng: number;
@@ -62,6 +78,16 @@ export class ExtractionOrchestrator {
       geoResult = await GeocodingService.getCoordinates(locationName);
       centerLat = geoResult.latitude;
       centerLng = geoResult.longitude;
+
+      // Calculate radius from viewport to properly cover the area
+      if (geoResult.viewport) {
+        const cornerDist = this.calculateDistance(
+          centerLat, centerLng, 
+          geoResult.viewport.high.latitude, geoResult.viewport.high.longitude
+        );
+        // Add padding to cover "around" the location better, capped at 50km
+        radiusMeters = Math.min(Math.ceil(cornerDist * 1.2), 50000);
+      }
     } else {
       if (latitude === undefined || longitude === undefined) {
          throw new Error("Latitude and longitude are required for map mode");
@@ -81,16 +107,7 @@ export class ExtractionOrchestrator {
     // Use a Map to automatically deduplicate by place_id
     const allPlaces = new Map<string, PlaceResult>();
 
-    // Helper to check if a place is inside the viewport
-    const isInsideViewport = (place: PlaceResult, viewport?: import('../../types').Viewport) => {
-      if (!viewport || !place.latitude || !place.longitude) return true;
-      return (
-        place.latitude >= viewport.low.latitude &&
-        place.latitude <= viewport.high.latitude &&
-        place.longitude >= viewport.low.longitude &&
-        place.longitude <= viewport.high.longitude
-      );
-    };
+    // No need for viewport bounds check anymore since locationRestriction enforces radius natively
 
     // 3. Search each point sequentially to avoid rate limits
     for (let i = 0; i < gridPoints.length; i++) {
@@ -109,9 +126,10 @@ export class ExtractionOrchestrator {
            );
 
            result.places.forEach(p => {
-             // For dropdown mode, strictly filter places by city boundaries
-             if (mode === 'dropdown' && geoResult?.viewport) {
-               if (!isInsideViewport(p, geoResult.viewport)) return;
+             // Strictly filter out any places that fall outside the main target radius
+             if (p.latitude !== null && p.longitude !== null) {
+               const dist = this.calculateDistance(centerLat, centerLng, p.latitude, p.longitude);
+               if (dist > radiusMeters) return;
              }
              
              if (!allPlaces.has(p.place_id)) {
