@@ -2,12 +2,15 @@
 import pdfMake from 'pdfmake/build/pdfmake.js';
 // @ts-expect-error — pdfmake lacks official type declarations
 import pdfFonts from 'pdfmake/build/vfs_fonts.js';
-import { Place } from '../../types';
+import { Place, PlaceResult } from '../../types';
 import { getExportTitleAndFilename } from './exportNaming';
 
 type PdfMakeInstance = {
   vfs?: Record<string, string>;
-  createPdf: (def: PdfDocDefinition) => { getBuffer: (cb: (buf: Buffer) => void) => void };
+  createPdf: (def: PdfDocDefinition) => { 
+    getBuffer: (cb: (buf: Buffer) => void) => void;
+    download: (filename: string) => void;
+  };
 };
 
 type PdfDocDefinition = {
@@ -23,8 +26,39 @@ if (pdfMakeLib && vfs) {
   pdfMakeLib.vfs = vfs;
 }
 
+const buildDocDefinition = (places: (Place | PlaceResult)[], title: string): PdfDocDefinition => {
+  const docDefinition: PdfDocDefinition = {
+    content: [
+      { text: title, style: 'header' },
+      { text: `Total Records: ${places.length}`, style: 'subheader', margin: [0, 0, 0, 20] },
+    ],
+    styles: {
+      header: { fontSize: 20, bold: true, margin: [0, 0, 0, 10], color: '#1e3a8a' },
+      subheader: { fontSize: 12, bold: true, margin: [0, 0, 0, 5], color: '#374151' },
+      placeTitle: { fontSize: 16, bold: true, color: '#111827', margin: [0, 15, 0, 5] },
+      placeDetails: { fontSize: 12, color: '#4b5563', margin: [0, 2, 0, 2], lineHeight: 1.4 },
+    },
+    defaultStyle: { font: 'Roboto' },
+  };
+
+  places.forEach((place, index) => {
+    (docDefinition.content as unknown[]).push({ text: `${index + 1}. ${place.name}`, style: 'placeTitle' });
+
+    const details: unknown[] = [];
+    if (place.category) details.push({ text: `Category: ${place.category.replace(/_/g, ' ')}` });
+    if (place.address) details.push({ text: `Address: ${place.address}` });
+    if (place.phone) details.push({ text: `Phone: ${place.phone}` });
+    if (place.website) details.push({ text: `Website: ${place.website}`, link: place.website, color: '#2563eb' });
+    if (place.rating) details.push({ text: `Rating: ${place.rating} (${place.review_count ?? 0} reviews)` });
+
+    (docDefinition.content as unknown[]).push({ ul: details, style: 'placeDetails', margin: [15, 0, 0, 15] });
+  });
+
+  return docDefinition;
+};
+
 export const generatePdfBuffer = (
-  places: Place[],
+  places: (Place | PlaceResult)[],
   metadata?: {
     category?: string;
     keyword?: string;
@@ -36,33 +70,7 @@ export const generatePdfBuffer = (
   return new Promise((resolve, reject) => {
     try {
       const { title } = getExportTitleAndFilename(metadata);
-
-      const docDefinition: PdfDocDefinition = {
-        content: [
-          { text: title, style: 'header' },
-          { text: `Total Records: ${places.length}`, style: 'subheader', margin: [0, 0, 0, 20] },
-        ],
-        styles: {
-          header: { fontSize: 20, bold: true, margin: [0, 0, 0, 10], color: '#1e3a8a' },
-          subheader: { fontSize: 12, bold: true, margin: [0, 0, 0, 5], color: '#374151' },
-          placeTitle: { fontSize: 16, bold: true, color: '#111827', margin: [0, 15, 0, 5] },
-          placeDetails: { fontSize: 12, color: '#4b5563', margin: [0, 2, 0, 2], lineHeight: 1.4 },
-        },
-        defaultStyle: { font: 'Roboto' },
-      };
-
-      places.forEach((place, index) => {
-        (docDefinition.content as unknown[]).push({ text: `${index + 1}. ${place.name}`, style: 'placeTitle' });
-
-        const details: unknown[] = [];
-        if (place.category) details.push({ text: `Category: ${place.category.replace(/_/g, ' ')}` });
-        if (place.address) details.push({ text: `Address: ${place.address}` });
-        if (place.phone) details.push({ text: `Phone: ${place.phone}` });
-        if (place.website) details.push({ text: `Website: ${place.website}`, link: place.website, color: '#2563eb' });
-        if (place.rating) details.push({ text: `Rating: ${place.rating} (${place.review_count ?? 0} reviews)` });
-
-        (docDefinition.content as unknown[]).push({ ul: details, style: 'placeDetails', margin: [15, 0, 0, 15] });
-      });
+      const docDefinition = buildDocDefinition(places, title);
 
       pdfMakeLib.createPdf(docDefinition).getBuffer((buffer: Buffer) => {
         resolve(buffer);
@@ -71,4 +79,20 @@ export const generatePdfBuffer = (
       reject(error);
     }
   });
+};
+
+export const generateAndDownloadPdf = (
+  places: (Place | PlaceResult)[],
+  metadata?: {
+    category?: string;
+    keyword?: string;
+    city?: string;
+    radius?: number;
+    mode?: 'dropdown' | 'map';
+  } | null
+) => {
+  const { title, filename } = getExportTitleAndFilename(metadata);
+  const docDefinition = buildDocDefinition(places, title);
+  
+  pdfMakeLib.createPdf(docDefinition).download(`${filename}.pdf`);
 };

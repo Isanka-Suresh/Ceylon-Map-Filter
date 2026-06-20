@@ -58,19 +58,8 @@ export const ResultsTable = ({ places, searchMetadata }: ResultsTableProps) => {
   const handleExportPDF = async () => {
     setIsExportingPdf(true);
     try {
-      const response = await fetch('/api/export/pdf', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ places, metadata: searchMetadata }),
-      });
-
-      if (!response.ok) throw new Error('Export failed');
-
-      const blob = await response.blob();
-      const disposition = response.headers.get('Content-Disposition') ?? '';
-      const match = disposition.match(/filename="?([^"]+)"?/);
-      const filename = match?.[1] ?? 'places_data.pdf';
-      triggerDownload(blob, filename);
+      const { generateAndDownloadPdf } = await import('../lib/utils/pdf');
+      generateAndDownloadPdf(places, searchMetadata);
     } catch (err) {
       console.error('PDF export error:', err);
     } finally {
