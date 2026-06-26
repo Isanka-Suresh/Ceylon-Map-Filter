@@ -37,6 +37,7 @@ export default function SearchPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [places, setPlaces] = useState<PlaceResult[]>([]);
+  const [selectedPlace, setSelectedPlace] = useState<PlaceResult | null>(null);
   const [searchMetadata, setSearchMetadata] = useState<{
     category: string;
     keyword: string;
@@ -119,6 +120,7 @@ export default function SearchPage() {
     setPostalCode('');
     setKeyword('');
     setPlaces([]);
+    setSelectedPlace(null);
     setSearchMetadata(null);
     setError(null);
   };
@@ -137,6 +139,7 @@ export default function SearchPage() {
     setIsLoading(true);
     setError(null);
     setPlaces([]);
+    setSelectedPlace(null);
     setSearchMetadata(null);
 
     const searchKeyword = keyword || category;
@@ -395,6 +398,32 @@ export default function SearchPage() {
                           />
                         </>
                       )}
+
+                      {places.map(place => {
+                        if (!place.latitude || !place.longitude) return null;
+                        const isSelected = selectedPlace?.place_id === place.place_id;
+                        return (
+                          <AdvancedMarker 
+                            key={place.place_id}
+                            position={{ lat: place.latitude, lng: place.longitude }}
+                            onClick={() => setSelectedPlace(place)}
+                            zIndex={isSelected ? 50 : 1}
+                          >
+                            <div 
+                              className={`flex items-center justify-center w-8 h-8 rounded-full shadow-lg border-2 transition-transform cursor-pointer ${
+                                isSelected 
+                                  ? 'bg-yellow-500 border-yellow-200 scale-125' 
+                                  : 'bg-blue-500 border-blue-200 hover:scale-110'
+                              }`}
+                              title={place.name}
+                            >
+                              <svg className={`w-4 h-4 ${isSelected ? 'text-gray-900' : 'text-white'}`} fill="currentColor" viewBox="0 0 24 24">
+                                <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/>
+                              </svg>
+                            </div>
+                          </AdvancedMarker>
+                        );
+                      })}
                     </Map>
                   </APIProvider>
                 </div>
@@ -422,7 +451,12 @@ export default function SearchPage() {
 
         {/* Results Section */}
         <div className="w-full max-w-6xl transition-all">
-          <ResultsTable places={places} searchMetadata={searchMetadata} />
+          <ResultsTable 
+            places={places} 
+            searchMetadata={searchMetadata} 
+            selectedPlaceId={selectedPlace?.place_id}
+            onPlaceSelect={setSelectedPlace}
+          />
         </div>
 
       </main>
